@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VMPK Kraków - Panel</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body,html{font-family:sans-serif;height:100vh;background:#f9fafb;color:#222;}
+
+  /* Sidebar */
+  nav{width:260px;background:#1c1c1c;color:#fff;display:flex;flex-direction:column;}
+  nav .logo{font-weight:700;font-size:24px;padding:25px 20px;text-align:center;border-bottom:3px solid #ff6f00;user-select:none;}
+  nav button{background:none;border:none;color:#bbb;font-size:16px;padding:18px 30px;text-align:left;cursor:pointer;font-weight:600;border-left:4px solid transparent;transition:0.3s;}
+  nav button:hover,nav button.active{color:#ff6f00;border-left-color:#ff6f00;background:#2e2e2e;}
+  nav button:focus{outline:none;box-shadow:0 0 0 3px #ffa726aa;}
+
+  main{flex-grow:1;padding:40px 50px;overflow-y:auto;}
+  header{font-size:26px;font-weight:700;margin-bottom:30px;}
+  h2{font-weight:700;font-size:20px;margin-bottom:18px;color:#444;}
+
+  .form-add-course,.form-login{display:flex;align-items:center;max-width:540px;margin-bottom:20px;}
+  input, select{flex-grow:1;font-size:16px;padding:14px 18px;border:2px solid #ddd;border-radius:4px 0 0 4px;transition:0.3s;}
+  input:focus, select:focus{outline:none;border-color:#ff6f00;}
+  button.add-course-btn,button.login-btn{background:#ff6f00;border:none;color:white;font-weight:700;padding:14px 28px;border-radius:0 4px 4px 0;cursor:pointer;font-size:16px;transition:0.3s;}
+  button.add-course-btn:hover,button.login-btn:hover{background:#e65c00;}
+
+  ul.course-list{margin-top:10px;max-width:600px;padding-left:0;list-style:none;}
+  ul.course-list li{background:white;box-shadow:0 2px 6px rgb(0 0 0 / 0.05);border-radius:5px;padding:15px 22px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:17px;color:#333;}
+  button.delete-btn{background:#ff3d00;border:none;padding:8px 14px;border-radius:4px;color:white;font-weight:700;cursor:pointer;transition:0.3s;}
+  button.delete-btn:hover{background:#cc3300;}
+
+  #loginScreen{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;}
+  #loginScreen h1{margin-bottom:30px;color:#ff6f00;}
+
+  @media(max-width:640px){
+    nav{width:100%;flex-direction:row;padding:0;border-bottom:1px solid #333;}
+    nav .logo{flex-grow:1;border-bottom:none;padding:15px 20px;font-size:20px;}
+    nav button{flex-grow:1;text-align:center;padding:12px 0;border-left:none;border-right:4px solid transparent;}
+    nav button.active{border-right-color:#ff6f00;border-left-color:transparent;}
+    main{padding:20px 15px;}
+    .form-add-course,.form-login{flex-direction:column;align-items:stretch;max-width:100%;}
+    input,select{border-radius:4px 4px 0 0;margin-bottom:10px;}
+    button.add-course-btn,button.login-btn{border-radius:0 0 4px 4px;width:100%;padding:14px 0;}
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav id="sidebar" style="display:none;">
+  <div class="logo">VMPK Kraków</div>
+  <button id="navCourses" class="active">Kursy</button>
+  <button id="navLogout">Wyloguj</button>
+</nav>
+
+<main id="mainContent">
+
+  <!-- Login -->
+  <div id="loginScreen">
+    <h1>VMPK Kraków</h1>
+    <form class="form-login" onsubmit="return false;">
+      <input type="text" id="loginUsername" placeholder="Login" required>
+      <input type="password" id="loginPassword" placeholder="Hasło" required>
+      <button class="login-btn" id="loginBtn">Zaloguj</button>
+    </form>
+  </div>
+
+  <!-- Panel kursów -->
+  <div id="coursesPanel" style="display:none;">
+    <header id="welcomeHeader"></header>
+    <section id="coursesSection">
+      <h2>Dodaj nowy kurs</h2>
+      <form class="form-add-course" onsubmit="return false;">
+        <input type="text" id="newCourseInput" placeholder="Nazwa kursu">
+        <select id="driverSelect">
+          <option value="">Wybierz kierowcę</option>
+        </select>
+        <button class="add-course-btn" id="addCourseBtn">Dodaj</button>
+      </form>
+      <ul class="course-list" id="courseList"></ul>
+    </section>
+  </div>
+
+</main>
+
+<script>
+  const users=[
+    {username:"admin",password:"admin",role:"admin"},
+    {username:"kierowca1",password:"123",role:"driver"},
+    {username:"kierowca2",password:"123",role:"driver"}
+  ];
+
+  let courses=JSON.parse(localStorage.getItem("vmpkCourses"))||[];
+
+  const loginScreen=document.getElementById("loginScreen");
+  const coursesPanel=document.getElementById("coursesPanel");
+  const sidebar=document.getElementById("sidebar");
+  const loginBtn=document.getElementById("loginBtn");
+  const loginUsername=document.getElementById("loginUsername");
+  const loginPassword=document.getElementById("loginPassword");
+  const welcomeHeader=document.getElementById("welcomeHeader");
+  const courseListEl=document.getElementById("courseList");
+  const newCourseInput=document.getElementById("newCourseInput");
+  const driverSelect=document.getElementById("driverSelect");
+  const addCourseBtn=document.getElementById("addCourseBtn");
+  const navLogout=document.getElementById("navLogout");
+
+  let currentUser=null;
+
+  // Wypełnij select kierowców
+  function populateDrivers(){
+    driverSelect.innerHTML='<option value="">Wybierz kierowcę</option>';
+    users.filter(u=>u.role==="driver").forEach(d=>{
+      const option=document.createElement("option");
+      option.value=d.username;
+      option.textContent=d.username;
+      driverSelect.appendChild(option);
+    });
+  }
+
+  // Logowanie
+  loginBtn.addEventListener("click",()=>{
+    const username=loginUsername.value.trim();
+    const password=loginPassword.value.trim();
+    const user=users.find(u=>u.username===username && u.password===password);
+    if(user){
+      currentUser=user;
+      loginScreen.style.display="none";
+      coursesPanel.style.display="block";
+      sidebar.style.display="flex";
+      welcomeHeader.textContent=`Witaj ${user.username} (${user.role})`;
+      populateDrivers();
+      renderCourses();
+    } else alert("Błędny login lub hasło!");
+  });
+
+  // Wylogowanie
+  navLogout.addEventListener("click",()=>{
+    currentUser=null;
+    loginScreen.style.display="flex";
+    coursesPanel.style.display="none";
+    sidebar.style.display="none";
+    loginUsername.value=""; loginPassword.value="";
+  });
+
+  // Render kursów
+  function renderCourses(){
+    courseListEl.innerHTML="";
+    let visibleCourses=courses;
+    if(currentUser.role==="driver"){
+      visibleCourses=courses.filter(c=>c.driver===currentUser.username);
+    }
+    if(visibleCourses.length===0){
+      courseListEl.innerHTML="<li>Brak kursów</li>";
+      return;
+    }
+    visibleCourses.forEach((course,i)=>{
+      const li=document.createElement("li");
+      li.innerHTML=`<span>${course.name} ${course.driver?`(Kierowca: ${course.driver})`:''}</span>${currentUser.role==="admin"?` <button class="delete-btn" data-index="${i}">Usuń</button>`:""}`;
+      courseListEl.appendChild(li);
+    });
+
+    document.querySelectorAll(".delete-btn").forEach(btn=>{
+      btn.addEventListener("click",e=>{
+        const index=e.target.getAttribute("data-index");
+        courses.splice(index,1);
+        saveCourses();
+        renderCourses();
+      });
+    });
+  }
+
+  function saveCourses(){
+    localStorage.setItem("vmpkCourses",JSON.stringify(courses));
+  }
+
+  // Dodawanie kursu
+  addCourseBtn.addEventListener("click",()=>{
+    const name=newCourseInput.value.trim();
+    const driver=driverSelect.value;
+    if(name){
+      courses.push({name:name,driver:driver});
+      saveCourses();
+      renderCourses();
+      newCourseInput.value="";
+      driverSelect.value="";
+    }
+  });
+</script>
+
+</body>
+</html>
